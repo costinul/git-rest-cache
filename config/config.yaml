@@ -1,0 +1,7 @@
+# config/config.yaml.example
+port: 8080
+log-level: "info"
+storage-folder: "./cached-repos"
+repo-ttl: "24h"
+token-ttl: "24h"
+repo-check-interval: "5m"
