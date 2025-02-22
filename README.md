@@ -134,7 +134,13 @@ Each Git provider has its own specific URL pattern for accessing repositories. B
   - **Description:**  
     Retrieves the content of a file (blob) from the specified branch.
     The API returns the requested file content with `Content-Type: application/octet-stream`.
-
+- **List (Directory Listing):**
+  - **URL Pattern:**  
+    `/github/:owner/:repo/:branch/list/*path`
+  - **Example Request:**  
+    `GET http://localhost:8080/github/costinul/git-rest-cache/main/list/gitcache/`
+  - **Description:**  
+    Retrieves a directory listing for the specified path within the repository.
 
 ### Planned Support
 
