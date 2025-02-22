@@ -112,7 +112,7 @@ Git REST Cache exposes a REST API to retrieve file content from cached Git repos
 To fetch the README.md file from the GitHub repository `https://github.com/costinul/git-rest-cache` on the `main` branch, call:
 
 ```
-http://localhost:8080/github/costinul/git-rest-cache/main/README.md
+http://localhost:8080/github/costinul/git-rest-cache/main/blob/README.md
 ```
 
 - If the repository is public, the request can be made without an `X-Token` header.
@@ -125,53 +125,48 @@ Each Git provider has its own specific URL pattern for accessing repositories. B
 ### Implemented
 
 #### **GitHub**
-- **URL Pattern:**  
-  `/github/:owner/:repo/:branch/*filepath`
-- **Example Request:**  
-http://localhost:8080/github/costinul/git-rest-cache/main/README.md
 
-- **Notes:**  
-- The `:owner` represents either an organization or a personal user account.
-- The repository is cloned if not already cached.
-- A valid `X-Token` is required for private repositories.
+- **Blob (File Content):**
+  - **URL Pattern:**  
+    `/github/:owner/:repo/:branch/blob/*filepath`
+  - **Example Request:**  
+    `GET http://localhost:8080/github/costinul/git-rest-cache/main/blob/README.md`
+  - **Description:**  
+    Retrieves the content of a file (blob) from the specified branch.
+    The API returns the requested file content with `Content-Type: application/octet-stream`.
 
----
 
 ### Planned Support
 
-#### **GitLab** (Planned)
-- **Expected URL Pattern:**  
-`/gitlab/:namespace/:repo/:branch/*filepath`
-- **Notes:**  
-- GitLab supports **nested groups**, so `:namespace` may contain multiple levels (e.g., `gitlab.com/acme/widgets/frontend-repo`).
-- Private repositories will require authentication.
+Additional providers will be supported in future releases, following similar patterns:
 
-#### **Bitbucket** (Planned)
-- **Expected URL Pattern:**  
-`/bitbucket/:workspace/:repo/:branch/*filepath`
-- **Notes:**  
-- Older Bitbucket URLs used `/:owner/:repo`, but newer ones prefer **workspaces**.
-- The `:workspace` ID can be a team, a user, or an organization.
+- **GitLab**  
+  - **Expected URL Pattern:**  
+    `/gitlab/:namespace/:repo/:branch/blob/*filepath`  
+  - **Note:**  
+    GitLab supports nested groups, so `:namespace` may contain multiple levels (e.g., `gitlab.com/acme/widgets/frontend-repo`).
 
-#### **Azure DevOps** (Planned)
-- **Expected URL Pattern:**  
-`/devops/:organization/:project/:repo/:branch/*filepath`
-- **Notes:**  
-- Azure DevOps URLs include both an `:organization` and a `:project`, before the `_git/:repo` path.
-- The repository is uniquely referenced within an organization/project context.
+- **Bitbucket**  
+  - **Expected URL Pattern:**  
+    `/bitbucket/:workspace/:repo/:branch/blob/*filepath`  
+  - **Note:**  
+    Newer Bitbucket URLs use workspaces instead of a simple owner/repo structure.
 
----
+- **Azure DevOps**  
+  - **Expected URL Pattern:**  
+    `/devops/:organization/:project/:repo/:branch/blob/*filepath`  
+  - **Note:**  
+    Azure DevOps URLs include both an organization and a project before the `_git/:repo` segment.
 
 ### Request Headers
-- **`X-Token` (optional):** A valid authentication token required for accessing private repositories.
 
+- **`X-Token` (optional):**  
+  A valid authentication token is required for accessing private repositories. This token is validated against the provider’s API and, if valid, is cached to minimize repeated external validations.
 
+### Notes
 
-### Response
-- Returns the file content with `Content-Type: application/octet-stream`.
-- If the repository or branch is not cached, it will be **cloned on demand**.
-- Subsequent requests will fetch the file **from the cache** unless an update occurs.
-
+- If the requested repository or branch is not yet cached, it is automatically cloned on demand.
+- Subsequent requests will fetch the file content directly from the cache unless an update has occurred.
 
 
 ## Testing
