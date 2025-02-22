@@ -36,7 +36,7 @@ func authMiddleware(gitCache *gitcache.GitCache, provider provider.Provider) gin
 	}
 }
 
-func getGitContentHandler(gitCache *gitcache.GitCache) gin.HandlerFunc {
+func getGitBlobHandler(gitCache *gitcache.GitCache) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		repo, exists := c.Get("repo")
 		if !exists {
@@ -50,7 +50,7 @@ func getGitContentHandler(gitCache *gitcache.GitCache) gin.HandlerFunc {
 			return
 		}
 
-		data, err := gitCache.GetFileContent(providerRepo.Hash(), providerRepo.GitURL(), c.Param("branch"), c.Param("filepath"))
+		data, err := gitCache.GetFileBlob(providerRepo.Hash(), providerRepo.GitURL(), c.Param("branch"), c.Param("filepath"))
 		if err != nil {
 			if err == gitcache.ErrFileNotFound {
 				c.String(http.StatusNotFound, "File not found")
@@ -61,5 +61,33 @@ func getGitContentHandler(gitCache *gitcache.GitCache) gin.HandlerFunc {
 		}
 
 		c.Data(http.StatusOK, "application/octet-stream", data)
+	}
+}
+
+func getGitListHandler(gitCache *gitcache.GitCache) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		repo, exists := c.Get("repo")
+		if !exists {
+			c.String(http.StatusInternalServerError, "Repo not found in context")
+			return
+		}
+
+		providerRepo, ok := repo.(provider.ProviderRepo)
+		if !ok {
+			c.String(http.StatusInternalServerError, "Invalid repo type in context")
+			return
+		}
+
+		files, err := gitCache.ListDir(providerRepo.Hash(), providerRepo.GitURL(), c.Param("branch"), c.Param("path"))
+		if err != nil {
+			if err == gitcache.ErrFileNotFound {
+				c.String(http.StatusNotFound, "Folder not found")
+			} else {
+				c.String(http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+
+		c.JSON(http.StatusOK, files)
 	}
 }

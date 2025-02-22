@@ -20,8 +20,11 @@ func NewCacheAPI(cfg *config.Config, gitCache *gitcache.GitCache, providerManage
 
 	providers := providerManager.GetProviders()
 	for _, p := range providers {
-		urlPath := fmt.Sprintf("%v/:branch/blob/*filepath", p.GetURLPath())
-		router.GET(urlPath, authMiddleware(gitCache, p), getGitContentHandler(gitCache))
+		blobPath := fmt.Sprintf("%v/:branch/blob/*filepath", p.GetURLPath())
+		router.GET(blobPath, authMiddleware(gitCache, p), getGitBlobHandler(gitCache))
+
+		listPath := fmt.Sprintf("%v/:branch/list/*path", p.GetURLPath())
+		router.GET(listPath, authMiddleware(gitCache, p), getGitListHandler(gitCache))
 	}
 
 	api := CacheAPI{

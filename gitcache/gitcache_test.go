@@ -133,12 +133,16 @@ func (m *mockGitManager) getCallCount() int {
 	return m.getCount
 }
 
+func (m *mockGitManager) listTree(branch *gitBranch, path string) ([]byte, error) {
+	return nil, nil
+}
+
 func TestGitCacheBasicFlow(t *testing.T) {
 	cfg := &config.Config{
-		StorageFolder:     "storage/cache",
+		StorageFolder:     t.TempDir(),
 		RepoTTL:           2 * time.Second,
 		TokenTTL:          2 * time.Second,
-		RepoCheckInterval: 1 * time.Second,
+		RepoCheckInterval: 500 * time.Millisecond,
 	}
 
 	ctx := context.Background()
@@ -154,7 +158,7 @@ func TestGitCacheBasicFlow(t *testing.T) {
 	filePath := "test.txt"
 	repoHash := mockRepoHash(gitUrl)
 
-	content1, err := cache.GetFileContent(repoHash, gitUrl, branch, filePath)
+	content1, err := cache.GetFileBlob(repoHash, gitUrl, branch, filePath)
 	assert.NoError(t, err, "Failed initial GetFile")
 
 	expectedInitial := fmt.Sprintf("Initial content for %s/%s", gitUrl, branch)
@@ -162,7 +166,7 @@ func TestGitCacheBasicFlow(t *testing.T) {
 
 	time.Sleep(2000 * time.Millisecond)
 
-	content2, err := cache.GetFileContent(repoHash, gitUrl, branch, filePath)
+	content2, err := cache.GetFileBlob(repoHash, gitUrl, branch, filePath)
 	assert.NoError(t, err, "Failed second GetFile")
 	assert.Equal(t, "Updated content", string(content2))
 
@@ -179,7 +183,7 @@ func TestGitCacheBasicFlow(t *testing.T) {
 
 func TestGitCacheConcurrentAccess(t *testing.T) {
 	cfg := &config.Config{
-		StorageFolder:     "storage/cache",
+		StorageFolder:     t.TempDir(),
 		RepoTTL:           5 * time.Second,
 		TokenTTL:          5 * time.Second,
 		RepoCheckInterval: 10 * time.Millisecond,
@@ -209,7 +213,7 @@ func TestGitCacheConcurrentAccess(t *testing.T) {
 
 			for j := 0; j < iterationsPerGoroutine; j++ {
 				repoHash := mockRepoHash(gitUrl)
-				content, err := cache.GetFileContent(repoHash, gitUrl, branch, filePath)
+				content, err := cache.GetFileBlob(repoHash, gitUrl, branch, filePath)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d iteration %d: %v", i, j, err)
 					return
@@ -232,7 +236,7 @@ func TestGitCacheConcurrentAccess(t *testing.T) {
 
 func TestGitCacheContextCancellation(t *testing.T) {
 	cfg := &config.Config{
-		StorageFolder:     "storage/cache",
+		StorageFolder:     t.TempDir(),
 		RepoTTL:           5 * time.Second,
 		TokenTTL:          5 * time.Second,
 		RepoCheckInterval: 100 * time.Millisecond,

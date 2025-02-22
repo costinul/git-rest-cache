@@ -127,9 +127,5 @@ func (c *GitCache) verifySettings() error {
 			c.cfg.RepoCheckInterval, c.cfg.RepoTTL)
 	}
 
-	if c.cfg.RepoTTL < time.Minute {
-		return fmt.Errorf("repo TTL (%s) is too short, minimum recommended is 1 minute", c.cfg.RepoTTL)
-	}
-
 	return nil
 }

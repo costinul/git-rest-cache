@@ -1,9 +1,13 @@
 package gitcache
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"path"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +27,13 @@ type GitCache struct {
 	running bool
 	ctx     context.Context
 	cmu     sync.RWMutex
+}
+
+type GitItem struct {
+	Hash string `json:"hash"`
+	Path string `json:"path"`
+	Type string `json:"type"`
+	Size int64  `json:"size"`
 }
 
 type gitRepo struct {
@@ -59,7 +70,7 @@ func NewGitCache(cfg *config.Config, ctx context.Context, manager GitCacheManage
 	}
 }
 
-func (c *GitCache) GetFileContent(hash, gitUrl, branch, filePath string) ([]byte, error) {
+func (c *GitCache) GetFileBlob(hash, gitUrl, branch, filePath string) ([]byte, error) {
 	b, err := c.getBranch(hash, gitUrl, branch)
 	if err != nil {
 		return nil, err
@@ -72,6 +83,15 @@ func (c *GitCache) GetFileContent(hash, gitUrl, branch, filePath string) ([]byte
 	b.touch()
 
 	return content, nil
+}
+
+func (c *GitCache) ListDir(hash, gitUrl, branch, path string) ([]GitItem, error) {
+	b, err := c.getBranch(hash, gitUrl, branch)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.listDir(path)
 }
 
 func (c *GitCache) getRepo(hash, gitUrl string) (*gitRepo, error) {
@@ -241,4 +261,56 @@ func (b *gitBranch) readFile(filePath string) ([]byte, error) {
 	}
 
 	return b.repo.cache.manager.readFile(b, filePath)
+}
+
+func (b *gitBranch) listDir(dirPath string) ([]GitItem, error) {
+	if err := b.cache(); err != nil {
+		return nil, err
+	}
+
+	if dirPath[:1] == "/" {
+		dirPath = dirPath[1:]
+	}
+
+	contents, err := b.repo.cache.manager.listTree(b, dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []GitItem
+	scanner := bufio.NewScanner(bytes.NewReader(contents))
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		meta := parts[0]
+		filePath := path.Join(dirPath, parts[1])
+		metaParts := strings.Fields(meta)
+		if len(metaParts) < 3 {
+			continue
+		}
+		itemType := metaParts[1]
+		hash := metaParts[2]
+		var size int64 = 0
+
+		if itemType == "blob" && len(metaParts) >= 4 {
+			s, err := strconv.ParseInt(metaParts[3], 10, 64)
+			if err == nil {
+				size = s
+			}
+		} else if itemType == "tree" {
+			itemType = "dir"
+		}
+
+		items = append(items, GitItem{
+			Hash: hash,
+			Path: filePath,
+			Type: itemType,
+			Size: size,
+		})
+	}
+
+	return items, nil
 }
