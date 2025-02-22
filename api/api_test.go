@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/costinul/git-rest-cache/config"
 	"github.com/costinul/git-rest-cache/gitcache"
@@ -91,15 +92,24 @@ func readFile(gitUrl, branch, filePath string) ([]byte, error) {
 	return []byte(fmt.Sprintf("content for url=%s, branch=%s, file=%s", gitUrl, branch, filePath)), nil
 }
 
+func listTree(gitUrl, branch, path string) ([]byte, error) {
+	if path == "folder" {
+		return []byte("100644 blob 9c955c2818ec5a99e62966f8ad2bd0f8a5d3d487     100\tfile.txt"), nil
+	}
+	return nil, gitcache.ErrFileNotFound
+}
+
 func TestAPIEndpoints(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
-		StorageFolder: "storage/cache",
-		Port:          8080,
+		StorageFolder:     t.TempDir(),
+		Port:              8080,
+		RepoTTL:           10 * time.Minute,
+		RepoCheckInterval: 1 * time.Minute,
 	}
 
 	ctx := context.Background()
-	gitManager := gitcache.NewTestGitManager(readFile)
+	gitManager := gitcache.NewTestGitManager(readFile, listTree)
 
 	gitCache := gitcache.NewGitCache(cfg, ctx, gitManager)
 	err := gitCache.Start()
@@ -120,7 +130,7 @@ func TestAPIEndpoints(t *testing.T) {
 	}{
 		{
 			name:       "Valid token for private repo",
-			path:       "/github/test/private-repo/main/file.txt",
+			path:       "/github/test/private-repo/main/blob/file.txt",
 			method:     "GET",
 			token:      "valid-token",
 			wantStatus: http.StatusOK,
@@ -128,14 +138,14 @@ func TestAPIEndpoints(t *testing.T) {
 		},
 		{
 			name:       "Invalid token for private repo",
-			path:       "/github/test/private-repo/main/file.txt",
+			path:       "/github/test/private-repo/main/blob/file.txt",
 			method:     "GET",
 			token:      "invalid-token",
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "Public repo with missing token",
-			path:       "/github/test/public-repo/main/file.txt",
+			path:       "/github/test/public-repo/main/blob/file.txt",
 			method:     "GET",
 			token:      "",
 			wantStatus: http.StatusOK,
@@ -143,15 +153,30 @@ func TestAPIEndpoints(t *testing.T) {
 		},
 		{
 			name:       "Public repo with inexistent file",
-			path:       "/github/test/public-repo/main/notfound.txt",
+			path:       "/github/test/public-repo/main/blob/notfound.txt",
 			method:     "GET",
 			token:      "",
 			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:       "Invalid provider",
-			path:       "/invalid/test/repo/main/file.txt",
+			path:       "/invalid/test/repo/main/blob/file.txt",
 			method:     "GET",
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "List public repo folder",
+			path:       "/github/test/public-repo/main/list/folder",
+			method:     "GET",
+			token:      "",
+			wantStatus: http.StatusOK,
+			wantBody:   `[{"hash":"9c955c2818ec5a99e62966f8ad2bd0f8a5d3d487","path":"folder/file.txt","type":"blob","size":100}]`,
+		},
+		{
+			name:       "List public repo inexistent folder",
+			path:       "/github/test/public-repo/main/list/folderx",
+			method:     "GET",
+			token:      "",
 			wantStatus: http.StatusNotFound,
 		},
 	}

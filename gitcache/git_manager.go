@@ -16,12 +16,14 @@ type GitCacheManager interface {
 	containsBranch(b *gitBranch) bool
 	deleteRepo(r *gitRepo) error
 	getCachedRepoBranches(storageFolder string) ([]repoBranchInfo, error)
+	listTree(b *gitBranch, path string) ([]byte, error)
 }
 
 type DefaultGitManager struct{}
 
 type TestGitManager struct {
 	ReadFileCallback func(gitUrl, branch, filePath string) ([]byte, error)
+	ListTreeCallback func(gitUrl, branch, path string) ([]byte, error)
 }
 
 func (m *DefaultGitManager) readFile(b *gitBranch, filePath string) ([]byte, error) {
@@ -157,9 +159,31 @@ func (m *DefaultGitManager) getCachedRepoBranches(storageFolder string) ([]repoB
 	return list, nil
 }
 
+func (m *DefaultGitManager) listTree(b *gitBranch, path string) ([]byte, error) {
+	fullPath := filepath.Join(b.path, path)
+	if info, err := os.Stat(fullPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrFileNotFound
+		}
+		return nil, fmt.Errorf("failed to stat path %s: %w", path, err)
+	} else if !info.IsDir() {
+		return nil, ErrFileNotFound
+	}
+
+	cmd := exec.CommandContext(b.repo.cache.ctx, "git", "-C", b.path, "ls-tree", "-l", "HEAD:"+path)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tree: %w, output: %s", err, string(output))
+	}
+
+	return output, nil
+}
+
 // TestGitManager
-func NewTestGitManager(readFileCallback func(gitUrl, branch, filePath string) ([]byte, error)) *TestGitManager {
-	return &TestGitManager{ReadFileCallback: readFileCallback}
+func NewTestGitManager(readFileCallback func(gitUrl, branch, filePath string) ([]byte, error),
+	listTreeCallback func(gitUrl, branch, path string) ([]byte, error)) *TestGitManager {
+	return &TestGitManager{ReadFileCallback: readFileCallback, ListTreeCallback: listTreeCallback}
 }
 
 func (m *TestGitManager) readFile(b *gitBranch, filePath string) ([]byte, error) {
@@ -196,4 +220,12 @@ func (e *TestGitManager) runCommand(ctx context.Context, name string, args ...st
 
 func (m *TestGitManager) getCachedRepoBranches(storageFolder string) ([]repoBranchInfo, error) {
 	return []repoBranchInfo{}, nil
+}
+
+func (m *TestGitManager) listTree(b *gitBranch, path string) ([]byte, error) {
+	content, err := m.ListTreeCallback(b.repo.gitUrl, b.name, path)
+	if err != nil {
+		return nil, err
+	}
+	return content, nil
 }

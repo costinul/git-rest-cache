@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/costinul/git-rest-cache/config"
 	"github.com/costinul/git-rest-cache/gitcache"
@@ -20,11 +19,12 @@ func NewCacheAPI(cfg *config.Config, gitCache *gitcache.GitCache, providerManage
 	router := gin.Default()
 
 	providers := providerManager.GetProviders()
-	for _, provider := range providers {
-		urlPath := fmt.Sprintf("%v/:branch/*filepath", provider.GetURLPath())
-		router.GET(urlPath, func(c *gin.Context) {
-			getGitContent(c, gitCache, provider)
-		})
+	for _, p := range providers {
+		blobPath := fmt.Sprintf("%v/:branch/blob/*filepath", p.GetURLPath())
+		router.GET(blobPath, authMiddleware(gitCache, p), getGitBlobHandler(gitCache))
+
+		listPath := fmt.Sprintf("%v/:branch/list/*path", p.GetURLPath())
+		router.GET(listPath, authMiddleware(gitCache, p), getGitListHandler(gitCache))
 	}
 
 	api := CacheAPI{
@@ -42,38 +42,6 @@ func (api *CacheAPI) Run() error {
 
 func (api *CacheAPI) Router() *gin.Engine {
 	return api.gin
-}
-
-func getGitContent(c *gin.Context, gitCache *gitcache.GitCache, provider provider.Provider) {
-	token := c.GetHeader("X-Token")
-	repo, err := provider.GetRepo(c)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "Error getting repo")
-		return
-	}
-
-	hasAccess, err := hasAccess(token, gitCache, repo)
-	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasAccess {
-		c.String(http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	data, err := gitCache.GetFileContent(repo.Hash(), repo.GitURL(), c.Param("branch"), c.Param("filepath"))
-	if err != nil {
-		if err == gitcache.ErrFileNotFound {
-			c.String(http.StatusNotFound, "File not found")
-		} else {
-			c.String(http.StatusInternalServerError, err.Error())
-		}
-		return
-	}
-
-	c.Data(http.StatusOK, "application/octet-stream", data)
 }
 
 func hasAccess(token string, gitCache *gitcache.GitCache, repo provider.ProviderRepo) (bool, error) {
