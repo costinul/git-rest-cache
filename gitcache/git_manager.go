@@ -1,7 +1,6 @@
 package gitcache
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,10 +30,18 @@ func (m *DefaultGitManager) readFile(b *gitBranch, filePath string) ([]byte, err
 	defer b.repo.rmu.RUnlock()
 
 	fp := filepath.Join(b.path, filepath.FromSlash(filePath))
-	content, err := os.ReadFile(fp)
-	if os.IsNotExist(err) {
+	info, err := os.Stat(fp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrFileNotFound
+		}
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if info.IsDir() {
 		return nil, ErrFileNotFound
 	}
+
+	content, err := os.ReadFile(fp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -43,9 +50,10 @@ func (m *DefaultGitManager) readFile(b *gitBranch, filePath string) ([]byte, err
 }
 
 func (m *DefaultGitManager) cloneBranch(b *gitBranch) error {
-	err := m.runCommand(b.repo.cache.ctx, "git", "clone", "--depth=1", "--branch", b.name, b.repo.gitUrl, b.path)
+	cmd := exec.CommandContext(b.repo.cache.ctx, "git", "clone", "--depth=1", "--branch", b.name, b.repo.gitUrl, b.path)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to clone branch: %w", err)
+		return fmt.Errorf("failed to clone branch: %w, output: %s", err, string(output))
 	}
 
 	return nil
@@ -109,15 +117,6 @@ func (m *DefaultGitManager) containsBranch(b *gitBranch) bool {
 	}
 
 	return gitInfo.IsDir()
-}
-
-func (e *DefaultGitManager) runCommand(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to run command: %w, output: %s", err, string(output))
-	}
-	return nil
 }
 
 func (m *DefaultGitManager) getCachedRepoBranches(storageFolder string) ([]repoBranchInfo, error) {
@@ -212,10 +211,6 @@ func (m *TestGitManager) deleteRepo(r *gitRepo) error {
 
 func (m *TestGitManager) containsBranch(b *gitBranch) bool {
 	return true
-}
-
-func (e *TestGitManager) runCommand(ctx context.Context, name string, args ...string) error {
-	return nil
 }
 
 func (m *TestGitManager) getCachedRepoBranches(storageFolder string) ([]repoBranchInfo, error) {
