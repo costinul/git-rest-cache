@@ -31,10 +31,18 @@ func (m *DefaultGitManager) readFile(b *gitBranch, filePath string) ([]byte, err
 	defer b.repo.rmu.RUnlock()
 
 	fp := filepath.Join(b.path, filepath.FromSlash(filePath))
-	content, err := os.ReadFile(fp)
-	if os.IsNotExist(err) {
+	info, err := os.Stat(fp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrFileNotFound
+		}
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if info.IsDir() {
 		return nil, ErrFileNotFound
 	}
+
+	content, err := os.ReadFile(fp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
