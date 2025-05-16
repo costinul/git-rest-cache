@@ -26,6 +26,7 @@ type GitCache struct {
 
 	running bool
 	ctx     context.Context
+	cancel  context.CancelFunc
 	cmu     sync.RWMutex
 }
 
@@ -61,12 +62,14 @@ type repoBranchInfo struct {
 }
 
 func NewGitCache(cfg *config.Config, ctx context.Context, manager GitCacheManager) *GitCache {
+	ctx, cancel := context.WithCancel(ctx)
 	return &GitCache{
 		cfg:        cfg,
 		tokenCache: ccache.New(ccache.Configure().MaxSize(10000000)),
 		repos:      make(map[string]*gitRepo),
 		manager:    manager,
 		ctx:        ctx,
+		cancel:     cancel,
 	}
 }
 

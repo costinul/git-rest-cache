@@ -37,7 +37,7 @@ func (c *GitCache) Stop() {
 	if !c.IsRunning() {
 		return
 	}
-	c.ctx.Done()
+	c.cancel()
 	c.tokenCache.Stop()
 }
 
